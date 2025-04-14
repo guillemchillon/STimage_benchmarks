@@ -1,0 +1,30 @@
+# CLI params: `/home/jiyaoz/statsproject/xenium_mouse_brain/grid_transcript/transcripts_downsample0.5_x0_y0.parquet -o /home/jiyaoz/statsproject/xenium_mouse_brain/baysor_output/downsample0.5_x0_y0 -m 30 -s 5 -x x_location -y y_location -z z_location -g feature_name`
+[data]
+x = "x_location"
+y = "y_location"
+z = "z_location"
+gene = "feature_name"
+force_2d = false
+min_molecules_per_gene = 1
+exclude_genes = ""
+min_molecules_per_cell = 30
+min_molecules_per_segment = 8
+confidence_nn_id = 16
+
+[segmentation]
+scale = 5.0
+scale_std = "25%"
+estimate_scale_from_centers = false
+n_clusters = 4
+prior_segmentation_confidence = 0.2
+iters = 500
+n_cells_init = 0
+nuclei_genes = ""
+cyto_genes = ""
+unassigned_prior_label = "0"
+
+[plotting]
+gene_composition_neigborhood = 0
+min_pixels_per_cell = 15
+max_plot_size = 3000
+ncv_method = "ri"

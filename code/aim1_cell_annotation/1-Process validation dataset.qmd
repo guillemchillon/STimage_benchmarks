@@ -1,0 +1,255 @@
+---
+title: "Image-Based Validation dataset"
+format: html
+editor: visual
+---
+
+### This notebook uses the Seurat v5 framework and publicly available datasets from the scMayoMap project. This notebook process the data and adds manual annotation or predicts them with external annotation tools like SingleR and SCINA.
+
+The data used here is derived from:
+
+scMayoMap paper: <https://bmcbiol.biomedcentral.com/articles/10.1186/s12915-023-01728-6>
+
+## Resources
+
+Seurat v5: <https://satijalab.org/seurat/articles/pbmc3k_tutorial>
+
+scMayoMap GitHub repository: <https://github.com/chloelulu/scMayoMap-paper>
+
+scMayoMap datasets on Figshare: <https://figshare.com/articles/dataset/scMayoMap_datasets/24239773/1>
+
+```{r include = FALSE}
+library(SingleR)
+library(dplyr)
+library(tidyr)
+library(Seurat)
+library(ggplot2)
+library(here)
+library(SCINA)
+library(scMayoMap)
+library(tibble)
+```
+
+```{r setup, include = FALSE, cache=FALSE}
+knitr::opts_knit$set(root.dir = here())
+```
+
+## Predict cell-type annotations
+
+### SingleR
+
+```{r}
+hpca.se <- celldex::HumanPrimaryCellAtlasData()
+```
+
+```{r}
+firstup <- function(x) {
+  substr(x, 1, 1) <- toupper(substr(x, 1, 1))
+  x
+}
+```
+
+```{r}
+files <- list.files("data/PBMC/input",
+                    full.names = TRUE, 
+                    ignore.case=TRUE)
+file <- files[1]
+```
+
+```{r}
+cat('[ ',file,' ]\n')
+seurat_obj <- NULL
+load(file)
+cat('[ ',file,' ]\n')
+seurat_obj <- meta.dat <- NULL
+load(file)
+
+meta.dat <- seurat_obj@meta.data %>% dplyr::select(celltype, cluster)
+gc()
+cat('-- SingleR --\n')
+
+dt <- as.matrix(seurat_obj@assays$RNA@counts)
+```
+
+```{r}
+pred.hesc <- SingleR(
+  test =dt, 
+  ref = hpca.se, 
+  assay.type.test=1, 
+  labels = hpca.se$label.main)
+```
+
+```{r}
+SingleR_res <- cbind.data.frame(
+  SingleR = pred.hesc$labels, 
+  benchmark = meta.dat$celltype,
+  stringsAsFactors = FALSE
+)
+```
+
+### SCINA
+
+```{r}
+signatures <- scMayoMapDatabase[scMayoMapDatabase$tissue=="blood",c(2,grep('^blood',colnames(scMayoMapDatabase)))]
+rownames(signatures) <- NULL
+signatures <- signatures %>% column_to_rownames('gene')
+colnames(signatures) <- gsub('.*\\:','',colnames(signatures))
+signatures[1:4,1:4]
+signatures <- apply(signatures, 2, function(x) names(which(x!=0)))
+```
+
+```{r}
+exp <- seurat_obj@assays$RNA@counts
+
+SCINA_results <- SCINA(
+  exp, 
+  signatures, 
+  max_iter = 100, 
+  convergence_n = 10, 
+  convergence_rate = 0.999, 
+  sensitivity_cutoff = 0.9, 
+  rm_overlap=F, 
+  allow_unknown=TRUE, 
+  log_file='data/PBMC/SCINA.log')
+
+```
+
+## UMAP visualization
+
+```{r}
+ElbowPlot(seurat_obj)
+```
+
+```{r}
+rownames(seurat_obj@meta.data) <- colnames(seurat_obj@assays$RNA@counts)
+seurat_obj <- RunUMAP(seurat_obj, dims = 1:20)  # Adjust dims as needed.
+```
+
+### SingleR
+
+```{r}
+# Here, we simply add the predictions as a new metadata column called "SingleR".
+seurat_obj$SingleR <- SingleR_res$SingleR
+
+# Define a mapping vector for SingleR annotations where a direct match exists:
+mapping_SingleR <- c(
+  "Monocyte"             = "CD14+ monocyte",
+  "Macrophage"           = "CD14+ monocyte",   # Both become CD14+ monocyte.
+  "Pre-B_cell_CD34-"     = "B cell",
+  "B_cell"               = "B cell",
+  "Pro-B_cell_CD34+"     = "B cell",
+  "T_cells"              = "Cytotoxic T cell",  # Ambiguous “T_cells” is assigned to Cytotoxic T cell.
+  "NK_cell"              = "Natural killer cell",
+  "Platelets"            = "Megakaryocyte"
+  # Other labels (e.g., "GMP", "CMP", "HSC_-G-CSF", "BM", "MEP",
+  # "Endothelial_cells", "Neutrophils", "Smooth_muscle_cells")
+  # do not correspond to any benchmark category so will be left unchanged.
+)
+```
+
+```{r}
+# Apply the mapping: if a SingleR label is found in the mapping vector,
+# use the mapped (coarser) label; otherwise, keep it unchanged.
+SingleR_coarse <- sapply(seurat_obj@meta.data$SingleR, function(lbl) {
+  if(lbl %in% names(mapping_SingleR)) {
+    mapping_SingleR[lbl]
+  } else {
+    lbl
+  }
+})
+names(SingleR_coarse) <- rownames(seurat_obj@meta.data)
+seurat_obj$SingleR_coarse <- SingleR_coarse
+```
+
+### SCINA
+
+```{r}
+seurat_obj$SCINA <- SCINA_results$cell_labels
+
+# Create a named vector where the names are the SCINA detailed labels,
+# and the values are the corresponding benchmark labels.
+SCINA_mapping <- c(
+  "CD14 Monocyte"                = "CD14+ monocyte",           # Map to CD14+ monocyte
+  "Megakaryocyte"                = "Megakaryocyte",            # Already matching
+  "Plasmacytoid dendritic cell"  = "Plasmacytoid dendritic cell",  # Already matching
+  "Naive B cell"                 = "B cell",                   # Group both naive and memory B cells into B cell
+  "Memory B cell"                = "B cell",
+  "CD4 T cell"                   = "CD4+ T cell",              # Map to CD4+ T cell (benchmark uses a plus sign)
+  "CD8 Effector Memory T cell"   = "Cytotoxic T cell",         # Map CD8 memory to cytotoxic T cell group
+  "CD4 Cytotoxic T cell"         = "Cytotoxic T cell",         # Map cytotoxic phenotype to Cytotoxic T cell
+  "CD56-dim natural killer cell" = "Natural killer cell",     # NK cell subsets unified
+  "CD56-bright natural killer cell" = "Natural killer cell",
+  "CD8 Central Memory T cell"    = "Cytotoxic T cell",        # Group all CD8 T cells as Cytotoxic T cells
+  "CD4 Effector Memory T cell"   = "CD4+ T cell",             # Map effector memory to CD4+ T cell
+  "CD8 T cell"                   = "Cytotoxic T cell",         # Typical CD8 T cell are cytotoxic
+  "CD4 Central Memory T cell"    = "CD4+ T cell",             # Map to CD4+ T cell
+  "Platelet"                     = "Megakaryocyte"            # Option: map Platelet to Megakaryocyte (if you want to merge platelet lineage)
+)
+```
+
+```{r}
+# Apply the mapping: for each SCINA label, if it exists in the mapping table, replace it;
+# otherwise, keep the original label.
+SCINA_coarse <- sapply(SCINA_results$cell_labels, function(x) {
+  if(x %in% names(SCINA_mapping)) {
+    SCINA_mapping[x]
+  } else {
+    x
+  }
+})
+
+names(SCINA_coarse) <- rownames(seurat_obj@meta.data)
+seurat_obj$SCINA_coarse <- SCINA_coarse
+```
+
+```{r}
+DimPlot(seurat_obj, reduction = "umap", group.by = "celltype", label = TRUE) + 
+  ggtitle("Benchmark Annotations")
+DimPlot(seurat_obj, reduction = "umap", group.by = "SingleR_coarse", label = TRUE) + 
+  ggtitle("SingleR Annotations")
+DimPlot(seurat_obj, reduction = "umap", group.by = "SingleR", label = TRUE) + 
+  ggtitle("SingleR Annotations Fine-Level")
+
+
+```
+
+```{r}
+DimPlot(seurat_obj, reduction = "umap", group.by = "celltype", label = TRUE) + ggtitle("Benchmark Annotations")
+
+DimPlot(seurat_obj, reduction = "umap", group.by = "SCINA_coarse", label = TRUE) +
+  ggtitle("SCINA Annotations")
+
+DimPlot(seurat_obj, reduction = "umap", group.by = "SCINA", label = TRUE) +
+  ggtitle("SCINA Annotations - Fine-Level")
+
+```
+
+## Export data
+
+```{r}
+# Extract the UMAP coordinates as a data frame
+embeddings <- as.data.frame(Embeddings(seurat_obj, "umap"))
+rownames(embeddings) <- NULL
+```
+
+```{r}
+# Add the desired metadata columns: benchmark and SingleR results.
+embeddings$celltype   <- seurat_obj$celltype
+embeddings$SingleR   <- seurat_obj$SingleR_coarse
+embeddings$SCINA   <- seurat_obj$SCINA_coarse
+
+embeddings$celltype <- as.integer(factor(embeddings$celltype)) - 1
+embeddings$SingleR <- as.integer(factor(embeddings$SingleR)) - 1
+embeddings$SCINA <- as.integer(factor(embeddings$SCINA)) - 1
+
+umap_coords <- embeddings[c("umap_1", "umap_2")]
+```
+
+```{r}
+# Write to CSV files
+write.csv(umap_coords, "data/PBMC/output/umap_embeddings.csv", row.names = FALSE)
+write.csv(embeddings$celltype, "data/PBMC/output/benchmark_cluster_labels.csv", row.names = FALSE)
+write.csv(embeddings$SingleR, "data/PBMC/output/SingleR_cluster_labels.csv", row.names = FALSE)
+write.csv(embeddings$SCINA, "data/PBMC/output/SCINA_cluster_labels.csv", row.names = FALSE)
+
+```

@@ -1,0 +1,87 @@
+---
+title: "Image-Based ST test dataset"
+format: html
+editor: visual
+---
+
+This notebook uses Seurat v5 framework and publicly available 10x Xenium dataset. The goal is to test if cluster distances can be correctly performed.
+
+## Resources
+
+Seurat v5: <https://satijalab.org/seurat/articles/seurat5_spatial_vignette_2>
+
+10x Xenium dataset: <https://www.10xgenomics.com/products/xenium>
+
+```{r include = FALSE}
+library(Seurat)
+library(future)
+plan("multisession", workers = 10)
+library(ggplot2)
+library(here)
+```
+
+```{bash, eval=FALSE}
+# Brain
+## wget https://cf.10xgenomics.com/samples/xenium/1.0.2/Xenium_V1_FF_Mouse_Brain_Coronal_Subset_CTX_HP/Xenium_V1_FF_Mouse_Brain_Coronal_Subset_CTX_HP_outs.zip
+## unzip Xenium_V1_FF_Mouse_Brain_Coronal_Subset_CTX_HP_outs.zip
+
+# Lung
+## wget https://cf.10xgenomics.com/samples/xenium/2.0.0/Xenium_V1_humanLung_Cancer_FFPE/Xenium_V1_humanLung_Cancer_FFPE_outs.zip
+## unzip Xenium_V1_humanLung_Cancer_FFPE_outs.zip
+```
+
+```{r setup, include = FALSE, cache=FALSE}
+knitr::opts_knit$set(root.dir = here())
+```
+
+```{r, results='hide'}
+path <- "data/xenium_tiny_subset_brain"
+# Load the Xenium data
+xenium.obj <- LoadXenium(path, fov = "fov")
+# remove cells with 0 counts
+xenium.obj <- subset(xenium.obj, subset = nCount_Xenium > 0)
+```
+
+```{r}
+VlnPlot(xenium.obj, features = c("nFeature_Xenium", "nCount_Xenium"), ncol = 2, pt.size = 0)
+```
+
+```{r}
+ImageDimPlot(xenium.obj, fov = "fov", molecules = c("Gad1", "Sst", "Pvalb", "Gfap"), nmols = 20000)
+```
+
+```{r}
+ImageFeaturePlot(xenium.obj, features = c("Cux2", "Rorb", "Bcl11b", "Foxp2"), max.cutoff = c(25,
+    35, 12, 10), size = 0.75, cols = c("white", "red"))
+```
+
+```{r}
+options(future.globals.maxSize = 2 * 1024^3)
+xenium.obj <- SCTransform(xenium.obj, assay = "Xenium")
+xenium.obj <- RunPCA(xenium.obj, npcs = 30, features = rownames(xenium.obj))
+xenium.obj <- RunUMAP(xenium.obj, dims = 1:30)
+xenium.obj <- FindNeighbors(xenium.obj, reduction = "pca", dims = 1:30)
+xenium.obj <- FindClusters(xenium.obj, resolution = 0.3)
+```
+
+```{r}
+DimPlot(xenium.obj)
+```
+
+```{r}
+FeaturePlot(xenium.obj, features = c("Cux2", "Bcl11b", "Foxp2", "Gad1", "Sst", "Gfap"))
+```
+
+```{r}
+ImageDimPlot(xenium.obj, cols = "polychrome", size = 0.75)
+```
+
+```{r}
+# Export data from R
+umap_coords <- Embeddings(xenium.obj, "umap")
+cluster_labels <- Idents(xenium.obj)
+
+# Write to CSV files
+write.csv(umap_coords, "data/umap_embeddings.csv", row.names = FALSE)
+write.csv(cluster_labels, "data/cluster_labels.csv", row.names = FALSE)
+```
