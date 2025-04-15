@@ -50,7 +50,7 @@ firstup <- function(x) {
 ```
 
 ```{r}
-files <- list.files("data/PBMC/input",
+files <- list.files("data/pbmc_dataset/input",
                     full.names = TRUE, 
                     ignore.case=TRUE)
 file <- files[1]
@@ -110,7 +110,7 @@ SCINA_results <- SCINA(
   sensitivity_cutoff = 0.9, 
   rm_overlap=F, 
   allow_unknown=TRUE, 
-  log_file='data/PBMC/SCINA.log')
+  log_file='data/pbmc_dataset/SCINA.log')
 
 ```
 
@@ -138,7 +138,7 @@ mapping_SingleR <- c(
   "Pre-B_cell_CD34-"     = "B cell",
   "B_cell"               = "B cell",
   "Pro-B_cell_CD34+"     = "B cell",
-  "T_cells"              = "Cytotoxic T cell",  # Ambiguous “T_cells” is assigned to Cytotoxic T cell.
+  "T_cells"              = "T cell",  # Ambiguous “T_cells” is assigned to Cytotoxic T cell.
   "NK_cell"              = "Natural killer cell",
   "Platelets"            = "Megakaryocyte"
   # Other labels (e.g., "GMP", "CMP", "HSC_-G-CSF", "BM", "MEP",
@@ -203,24 +203,35 @@ seurat_obj$SCINA_coarse <- SCINA_coarse
 ```
 
 ```{r}
-DimPlot(seurat_obj, reduction = "umap", group.by = "celltype", label = TRUE) + 
+umapGT <- DimPlot(seurat_obj, reduction = "umap", group.by = "celltype", label = TRUE) + 
   ggtitle("Benchmark Annotations")
-DimPlot(seurat_obj, reduction = "umap", group.by = "SingleR_coarse", label = TRUE) + 
-  ggtitle("SingleR Annotations")
-DimPlot(seurat_obj, reduction = "umap", group.by = "SingleR", label = TRUE) + 
-  ggtitle("SingleR Annotations Fine-Level")
+umapGT
+ggsave("figures/scRNA_umapGT.png", plot=umapGT, width=13, heigh= 8, dpi=900)
 
+umapSingleR <- DimPlot(seurat_obj, reduction = "umap", group.by = "SingleR_coarse", label = TRUE) + 
+  ggtitle("SingleR Annotations")
+umapSingleR
+ggsave("figures/scRNA_umapSingleR.png", plot=umapSingleR, width=13, heigh= 8, dpi=900)
+
+umapSingleRFine <- DimPlot(seurat_obj, reduction = "umap", group.by = "SingleR", label = TRUE) + 
+  ggtitle("SingleR Annotations Fine-Level")
+umapSingleRFine
+ggsave("figures/scRNA_umapSingleRFine.png", plot=umapSingleRFine, width=13, heigh= 8, dpi=900)
 
 ```
 
 ```{r}
 DimPlot(seurat_obj, reduction = "umap", group.by = "celltype", label = TRUE) + ggtitle("Benchmark Annotations")
 
-DimPlot(seurat_obj, reduction = "umap", group.by = "SCINA_coarse", label = TRUE) +
+umapSCINA <- DimPlot(seurat_obj, reduction = "umap", group.by = "SCINA_coarse", label = TRUE) +
   ggtitle("SCINA Annotations")
+umapSCINA
+ggsave("figures/scRNA_umapSCINA.png", plot=umapSCINA, width=16, heigh= 8, dpi=900)
 
-DimPlot(seurat_obj, reduction = "umap", group.by = "SCINA", label = TRUE) +
+umapSCINAFine <- DimPlot(seurat_obj, reduction = "umap", group.by = "SCINA", label = TRUE) +
   ggtitle("SCINA Annotations - Fine-Level")
+umapSCINAFine
+ggsave("figures/scRNA_umapSCINAFine.png", plot=umapSCINAFine, width=16, heigh= 8, dpi=900)
 
 ```
 
@@ -247,9 +258,9 @@ umap_coords <- embeddings[c("umap_1", "umap_2")]
 
 ```{r}
 # Write to CSV files
-write.csv(umap_coords, "data/PBMC/output/umap_embeddings.csv", row.names = FALSE)
-write.csv(embeddings$celltype, "data/PBMC/output/benchmark_cluster_labels.csv", row.names = FALSE)
-write.csv(embeddings$SingleR, "data/PBMC/output/SingleR_cluster_labels.csv", row.names = FALSE)
-write.csv(embeddings$SCINA, "data/PBMC/output/SCINA_cluster_labels.csv", row.names = FALSE)
+write.csv(umap_coords, "data/pmbc_dataset/output/umap_embeddings.csv", row.names = FALSE)
+write.csv(embeddings$celltype, "data/pmbc_dataset/output/benchmark_cluster_labels.csv", row.names = FALSE)
+write.csv(embeddings$SingleR, "data/pmbc_dataset/output/SingleR_cluster_labels.csv", row.names = FALSE)
+write.csv(embeddings$SCINA, "data/pmbc_dataset/output/SCINA_cluster_labels.csv", row.names = FALSE)
 
 ```

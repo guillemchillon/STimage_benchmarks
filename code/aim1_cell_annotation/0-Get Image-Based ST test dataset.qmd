@@ -1,4 +1,5 @@
 ---
+a---
 title: "Image-Based ST test dataset"
 format: html
 editor: visual
@@ -35,7 +36,7 @@ knitr::opts_knit$set(root.dir = here())
 ```
 
 ```{r, results='hide'}
-path <- "data/xenium_tiny_subset_brain"
+path <- "data/xenium_tiny_subset_brain/input"
 # Load the Xenium data
 xenium.obj <- LoadXenium(path, fov = "fov")
 # remove cells with 0 counts
@@ -43,16 +44,22 @@ xenium.obj <- subset(xenium.obj, subset = nCount_Xenium > 0)
 ```
 
 ```{r}
-VlnPlot(xenium.obj, features = c("nFeature_Xenium", "nCount_Xenium"), ncol = 2, pt.size = 0)
+vln <- VlnPlot(xenium.obj, features = c("nFeature_Xenium", "nCount_Xenium"), ncol = 2, pt.size = 0)
+vln 
+ggsave("figures/test_vlnplot.png", plot=vln, dpi=900)
 ```
 
 ```{r}
-ImageDimPlot(xenium.obj, fov = "fov", molecules = c("Gad1", "Sst", "Pvalb", "Gfap"), nmols = 20000)
+imgDimPlot <- ImageDimPlot(xenium.obj, fov = "fov", molecules = c("Gad1", "Sst", "Pvalb", "Gfap"), nmols = 20000)
+imgDimPlot
+ggsave("figures/test_imgDimPlot.png", plot=imgDimPlot, dpi=900)
 ```
 
 ```{r}
-ImageFeaturePlot(xenium.obj, features = c("Cux2", "Rorb", "Bcl11b", "Foxp2"), max.cutoff = c(25,
+imgFeaturePlot <- ImageFeaturePlot(xenium.obj, features = c("Cux2", "Rorb", "Bcl11b", "Foxp2"), max.cutoff = c(25,
     35, 12, 10), size = 0.75, cols = c("white", "red"))
+imgFeaturePlot
+ggsave("figures/test_imgFeaturePlot.png", plot=imgFeaturePlot, dpi=900)
 ```
 
 ```{r}
@@ -65,15 +72,21 @@ xenium.obj <- FindClusters(xenium.obj, resolution = 0.3)
 ```
 
 ```{r}
-DimPlot(xenium.obj)
+umap<- DimPlot(xenium.obj)
+umap
+ggsave("figures/test_umap.png", plot=umap, dpi=900)
 ```
 
 ```{r}
-FeaturePlot(xenium.obj, features = c("Cux2", "Bcl11b", "Foxp2", "Gad1", "Sst", "Gfap"))
+umapFeaturePlot <- FeaturePlot(xenium.obj, features = c("Cux2", "Bcl11b", "Foxp2", "Gad1", "Sst", "Gfap"))
+umapFeaturePlot
+ggsave("figures/test_umapFeaturePlot.png", plot=umapFeaturePlot, width=20, heigh=15, dpi=300)
 ```
 
 ```{r}
-ImageDimPlot(xenium.obj, cols = "polychrome", size = 0.75)
+umapImgDimPlot <- ImageDimPlot(xenium.obj, cols = "polychrome", size = 0.75)
+umapImgDimPlot
+ggsave("figures/test_umapImgDimPlot.png", plot=umapImgDimPlot, dpi=900)
 ```
 
 ```{r}
